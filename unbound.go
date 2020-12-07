@@ -3,6 +3,7 @@ package unbound
 import (
 	"context"
 	"fmt"
+	"errors"
 	"strconv"
 
 	"github.com/coredns/coredns/plugin"
@@ -23,6 +24,7 @@ type Unbound struct {
 
 	from   []string
 	except []string
+	strict bool
 
 	Next plugin.Handler
 }
@@ -86,6 +88,22 @@ func (u *Unbound) config(f string) error {
 	return nil
 }
 
+// anchor reads the file f and sets it as anchor
+func (u *Unbound) setAnchor(f string) error {
+	var err error
+
+	err = u.u.AddTaFile(f)
+	if err != nil {
+		return fmt.Errorf("failed to read trust anchor file (%s) UDP context: %s", f, err)
+	}
+
+	err = u.t.AddTaFile(f)
+	if err != nil {
+		return fmt.Errorf("failed to read trust anchor file (%s) TCP context: %s", f, err)
+	}
+	return nil
+}
+
 // ServeDNS implements the plugin.Handler interface.
 func (u *Unbound) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
@@ -121,7 +139,9 @@ func (u *Unbound) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 	if err != nil {
 		return dns.RcodeServerFailure, err
 	}
-
+	if u.strict && !res.Secure {
+		return dns.RcodeServerFailure, errors.New("dnssec validation failed")
+	}
 	// If the client *didn't* set the opt record, and specifically not the DO bit,
 	// strip this from the reply (unbound default to setting DO).
 	if !state.Do() {

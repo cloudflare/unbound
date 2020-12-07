@@ -93,6 +93,15 @@ func unboundParse(c *caddy.Controller) (*Unbound, error) {
 				if err = u.config(args[0]); err != nil {
 					return nil, err
 				}
+			case "anchor":
+				args = c.RemainingArgs()
+				if len(args) != 1 {
+					return nil, c.ArgErr()
+				}
+				if err = u.setAnchor(args[0]); err != nil {
+					return nil, err
+				}
+				u.strict = true
 			default:
 				return nil, c.ArgErr()
 			}
